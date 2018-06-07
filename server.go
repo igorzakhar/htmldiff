@@ -1,41 +1,79 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
+	"context"
+	"encoding/json"
+	"html/template"
 	"htmldiff/diff"
+	"io/ioutil"
+	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
-	router := gin.Default()
-	router.LoadHTMLGlob("templates/*")
-	router.Static("/static", "./static")
-	router.StaticFile("/img/favicon.ico", "./static/img/favicon.ico")
-	router.GET("/", index)
-	router.POST("/api/v1/htmldiff", getDiff)
-	router.Run(":8080")
+	fs := http.FileServer(http.Dir("static"))
+	http.Handle("/static/", http.StripPrefix("/static/", fs))
+	http.HandleFunc("/", Index)
+	http.HandleFunc("/api/v1/htmldiff", MessageHandler)
+	s := http.Server{Addr: ":8080"}
+	go func() {
+		log.Fatal(s.ListenAndServe())
+	}()
+
+	signallChan := make(chan os.Signal, 1)
+	signal.Notify(signallChan, syscall.SIGINT, syscall.SIGTERM)
+	<-signallChan
+	log.Printf("Shutdown signal received, exiting...")
+
+	s.Shutdown(context.Background())
 }
 
-func index(c *gin.Context) {
-	c.HTML(http.StatusOK, "index.tmpl", gin.H{
-		"title": "Diff service",
-	})
+func Index(w http.ResponseWriter, req *http.Request) {
+	tmpl := template.Must(template.ParseFiles("templates/index.html"))
+	err := tmpl.ExecuteTemplate(w, "index.html", nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
-func getDiff(c *gin.Context) {
+func MessageHandler(w http.ResponseWriter, req *http.Request) {
 	var message struct {
 		Text1 string `json:"text1"`
 		Text2 string `json:"text2`
 	}
 
-	if err := c.ShouldBindJSON(&message); err == nil {
-		res, err := diff.DiffHTML(message.Text1, message.Text2)
-		if err == nil {
-			c.JSON(http.StatusOK, gin.H{"result": res})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
-		}
-	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
+	var response struct {
+		Result string `json:"result"`
 	}
+
+	body, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = json.Unmarshal(body, &message)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	diffs, err := diff.DiffHTML(message.Text1, message.Text2)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response.Result = diffs
+	messageJson, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(messageJson)
 }

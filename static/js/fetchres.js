@@ -49,7 +49,7 @@ compareButton.addEventListener("click", function () {
     response.json().then(function(data) {  
       resultDiff.innerHTML = "<h3 class=\"mt-2\">Result:</h3>" + data.result + legendHTML
     }).catch(function(error) {
-      resultDiff.innerHTML = "<h3 class=\"mt-2\">ERROR:</h3>" + error
+      resultDiff.innerHTML = "<h3 class=\"mt-2\">ERROR:</h3>" + response.statusText
     });
   });
 
