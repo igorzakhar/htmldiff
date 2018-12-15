@@ -23,6 +23,10 @@ $ go run server.go
 ```
 После запуска сервис доступен по адресу [http://127.0.0.1:8080/](http://127.0.0.1:8080)
 
+### Пример работы сервиса:
+
+![Diff screenshot](https://raw.githubusercontent.com/igorzakhar/35_diff_service/master/screenshot/diff_screenshot.png)
+
 ### Создание исполняемого файла
 
 Перейдите в каталог ```$GOPATH/src/htmldiff``` и выполните команду:
